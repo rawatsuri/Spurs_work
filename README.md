@@ -1,142 +1,107 @@
-# Server - AI Chat Backend
+# AI Live Chat Agent
 
-Express + TypeScript + Prisma backend for the AI chat application.
+A customer support chat widget with AI integration using **OpenRouter API**.
 
-## Architecture
+## Quick Start
 
-### Folder Structure
+### Prerequisites
 
-```
-src/
-├── controllers/        # Request handlers (thin layer)
-│   ├── chat.controller.ts
-│   └── user.controller.ts
-├── services/           # Business logic
-│   ├── chat.service.ts      # Session & message management
-│   └── openrouter.service.ts # LLM integration
-├── routers/            # Route definitions
-│   ├── chat.router.ts
-│   └── index.ts
-├── middlewares/        # Express middlewares
-│   ├── error.middleware.ts  # Global error handling
-│   └── validation.middleware.ts
-├── exceptions/         # Custom error classes
-│   ├── BadRequestError.ts
-│   ├── NotFoundError.ts
-│   └── ...
-├── validations/        # Zod schemas for request validation
-├── lib/               # Database connection (Prisma)
-├── types/             # TypeScript types
-└── server.ts          # Entry point
+- Node.js >= 18
+- pnpm (recommended) or npm
+
+### 1. Configure Environment
+
+Copy the example environment files:
+
+```bash
+# Server environment
+cp server/.env.example server/.env
+
+# Client environment
+cp client/.env.example client/.env
 ```
 
-### Design Decisions
+Edit `server/.env` and add your OpenRouter API key:
 
-#### 1. Layered Architecture
-
-We follow a clean separation of concerns:
-
-- **Controllers** → Handle HTTP request/response, delegate to services
-- **Services** → Contain all business logic, interact with database
-- **Routers** → Define API routes and attach controllers
-
-This makes the code testable and maintainable.
-
-#### 2. OpenRouter Integration
-
-We chose **OpenRouter** over a single LLM provider for flexibility:
-
-```typescript
-// openrouter.service.ts
-const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-  headers: { Authorization: `Bearer ${apiKey}` },
-  body: JSON.stringify({ model: selectedModel, messages, max_tokens }),
-});
+```
+DATABASE_URL=file:./dev.db
+OPENROUTER_API_KEY=your_openrouter_api_key_here
 ```
 
-**Why OpenRouter?**
-- Switch between models (GPT-4, Claude, Mistral, etc.) without code changes
-- Users can select their preferred model from the frontend
-- Single API key, multiple providers
+> Get your API key from [openrouter.ai](https://openrouter.ai/)
+>
+> **Supabase Setup (Optional)**
+> 1. Create a new project on [Supabase.com](https://supabase.com/).
+> 2. Go to Project Settings -> Database -> Connection String.
+> 3. Copy the "URI" for Transaction Mode (Port 6543) or Session Mode (Port 5432).
+> 4. In `server/.env`, replace `DATABASE_URL` with your Supabase connection string.
+>    ```
+>    DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.your-project.supabase.co:5432/postgres
+>    ```
+> 5. (Important) If using Transaction Mode (PgBouncer), you may need to add `?pgbouncer=true` to the URL.
+> 6. Run the setup command to push the schema to your Supabase database:
+>    ```bash
+>    pnpm run db:setup
+>    ```
 
-#### 3. System Prompt Strategy
+### 2. Install & Setup
 
-The LLM is prompted as a support agent for a fictional e-commerce store:
-
-```typescript
-const STORE_KNOWLEDGE = `
-You are a helpful support agent for "Spurify" - a fictional e-commerce store.
-
-STORE POLICIES:
-- Shipping: We ship worldwide within 3-5 business days...
-- Returns: 30-day return policy...
-`;
+```bash
+pnpm run setup
 ```
 
-This gives the chatbot a consistent persona and domain knowledge.
+This installs all dependencies and sets up the database.
 
-#### 4. Conversation Context
+### 3. Run the App
 
-Full conversation history is sent with each request for better context:
-
-```typescript
-const allMessages = [
-  { role: 'system', content: STORE_KNOWLEDGE },
-  ...messages.slice(-maxMessages), // Limit to prevent token overflow
-];
+```bash
+pnpm run prod
 ```
 
-Trade-off: Better accuracy vs. higher token cost (configurable via `MAX_MESSAGES_PER_SESSION`).
+Opens at **http://localhost:5001** (frontend + API on same port)
 
-#### 5. Custom Exception Classes
+---
 
-We use custom error classes that extend a base `HttpError`:
+## Development Mode
 
-```typescript
-throw new NotFoundError('Chat session not found');
-throw new BadRequestError('Message cannot be empty');
+If you want to run in development mode with hot reload:
+
+```bash
+# Terminal 1 - Backend
+pnpm run dev:server
+
+# Terminal 2 - Frontend
+pnpm run dev:client
 ```
 
-The error middleware catches these and returns proper HTTP status codes.
+- Frontend: http://localhost:5173
+- Backend: http://localhost:5001
 
-#### 6. Prisma ORM
+---
 
-Database schema is simple but effective:
+## Available Scripts
 
-```prisma
-model ChatSession {
-  id        String    @id @default(cuid())
-  title     String
-  messages  Message[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-}
+| Script              | Description                           |
+| ------------------- | ------------------------------------- |
+| `pnpm run setup`    | Install all dependencies + setup database |
+| `pnpm run prod`     | Build and run production server       |
+| `pnpm run dev:server` | Run backend in dev mode             |
+| `pnpm run dev:client` | Run frontend in dev mode            |
 
-model Message {
-  id            String      @id @default(cuid())
-  chatSession   ChatSession @relation(...)
-  role          Role        // USER or ASSISTANT
-  content       String
-  timestamp     DateTime    @default(now())
-}
-```
+---
 
-## API Endpoints
+## Technology Stack
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/chat/sessions` | Get all chat sessions |
-| POST | `/api/v1/chat/sessions` | Create new session |
-| GET | `/api/v1/chat/sessions/:id` | Get session with messages |
-| DELETE | `/api/v1/chat/sessions/:id` | Delete session |
-| POST | `/api/v1/chat/sessions/:id/messages` | Send message & get AI response |
+- **Backend**: Node.js + TypeScript + Express
+- **Database**: PostgreSQL / SQLite (via Prisma ORM)
+- **Frontend**: React + TypeScript + Vite
+- **State Management**: Zustand + TanStack Query
+- **Styling**: Tailwind CSS + shadcn/ui
+- **LLM Provider**: OpenRouter (supports multiple models)
 
-## Environment Variables
+---
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL or SQLite connection | Required |
-| `OPENROUTER_API_KEY` | OpenRouter API key | Required |
-| `MAX_TOKENS_PER_MESSAGE` | Max tokens per LLM response | 1000 |
-| `MAX_MESSAGES_PER_SESSION` | Max messages for context | 50 |
-| `PORT` | Server port | 5001 |
+For more details about the architecture and folder structure, see the individual READMEs:
+- [Server README](./server/README.md)
+- [Client README](./client/README.md)
+#
